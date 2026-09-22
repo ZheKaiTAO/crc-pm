@@ -1047,14 +1047,6 @@
     "export_dir = Path(\"../../result/curated/merged.h5ad\")\n",
     "concat_adata.write_h5ad(export_dir)"
    ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "ec2db491-1a6b-4248-bc21-a3756cfcd594",
-   "metadata": {},
-   "outputs": [],
-   "source": []
   }
  ],
  "metadata": {
