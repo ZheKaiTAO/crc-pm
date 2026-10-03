@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 
-MAPPING_PATH = Path.home() / "project/crc-pm/GTF"
+MAPPING_PATH = Path.home() / "project/crc-pm/tables/GTF"
 
 BIOTYPE_PRIORITY = {
     "protein_coding": 0,
@@ -44,6 +44,9 @@ BIOTYPE_PRIORITY = {
     "misc_RNA": 8,
 }
 
+
+def get_versions():
+    return [p.name for p in MAPPING_PATH.iterdir() if p.is_dir()]
 
 @cache
 def get_gene_mappings(version):
