@@ -1,10 +1,9 @@
-"""Gene-set scoring with offline historical-symbol resolution."""
 from pathlib import Path
 import warnings
-
 import pandas as pd
 
-from .GeneSetMapping import assess_coverage, get_resolver
+from .GTFMapping import resolve_gene_name
+# . means import relatively
 
 GENE_SET_ROOT_DIR = Path(__file__).resolve().parents[2] / 'tables/geneset'
 
@@ -12,61 +11,55 @@ GENE_SET_ROOT_DIR = Path(__file__).resolve().parents[2] / 'tables/geneset'
 def get_names():
     return sorted(path.stem for path in GENE_SET_ROOT_DIR.glob('*.csv'))
 
+def parse_multiple(genes:[str], sep = '|'):
+    """
+    pass a list of gene names, in which there could be multiple name in one str
+    """
+    single_gene_list = []
+    for item in genes:
+        if item == '':
+            raise ValueError('Empty gene name in the list')
+        single_gene_list = single_gene_list + [i.strip() for i in item.split(sep)]
+    return single_gene_list
 
-def read_gene_set(score_name=None, *, return_report=False):
-    """Return unique ENSG IDs, optionally with a per-input mapping report."""
+def read_gene_set(score_name=None):
+    """
+    pass a name in dir
+    return (1) a list of ENSG id (2) generated dict
+    """
     if score_name not in get_names():
         raise ValueError(f'Unknown gene set: {score_name!r}')
     path = GENE_SET_ROOT_DIR / f'{score_name}.csv'
-    try:
-        genes = pd.read_csv(path, header=None, dtype=str, keep_default_na=False).iloc[:, 0].tolist()
-    except pd.errors.EmptyDataError:
-        genes = []
-    report = get_resolver().resolve_genes(genes)
-    ids = list(dict.fromkeys(report.loc[report.status.eq('mapped'), 'gene_id']))
-    if return_report:
-        return ids, report
-    unresolved = report.loc[~report.status.eq('mapped'), 'name'].unique()
-    if len(unresolved):
-        warnings.warn(
-            f'{score_name}: {len(unresolved)} names unresolved or ambiguous: '
-            + ', '.join(unresolved) + '. Use return_report=True for details.',
-            UserWarning, stacklevel=2,
-        )
-    return ids
-
+    genes = parse_multiple(pd.read_csv(
+        path,header=None,
+        keep_default_na=False,).iloc[:, 0].tolist())
+    resolved_ENSG = resolve_gene_name(genes, fill_NA=False) # a pd dataframe
+    nona_ids = resolved_ENSG['gene_id'].ne('NA')
+    # we don't care about the values actually; list(dict) is just to deduplicated since dict keys will be unique
+    ids = list(dict.fromkeys(resolved_ENSG.loc[nona_ids, 'gene_id']))
+    return ids, resolved_ENSG
 
 def sEval(adata, flavour='scanpy', layer='log1p', score_name=None):
-    import scanpy as sc
     if not score_name:
         raise ValueError('score_name is not provided')
-    _, report = read_gene_set(score_name, return_report=True)
-    available, report, summary = assess_coverage(report, adata.var_names)
-    if not summary['total']:
-        raise ValueError(f'Gene set {score_name} is empty')
-    if not available:
-        raise ValueError(f'Gene set {score_name} has no available genes in the dataset')
-    message = (
-        f"{score_name}: {summary['unresolved_unique_names']} unresolved names "
-        f"({summary['ambiguous_unique_names']} ambiguous), "
-        f"{summary['missing_dataset_ids']} resolved ENSG IDs absent from dataset; "
-        f"{summary['available_ids']}/{summary['total']} available."
-    )
-    if summary['missing_fraction'] > 0.25:
-        raise ValueError('more than 25% of the genes are unavailable. ' + message)
-    if summary['missing_fraction']:
-        warnings.warn(message, UserWarning, stacklevel=2)
-    ### checked
-    
+    ids, resolved_ENSG = read_gene_set(score_name)
+    # need to check if ENSG ids are available in adata
+    percentage = 100 * len([notfound for notfound in ids if not notfound in adata.var_names]) / len(ids)
+    if percentage > 5:
+        warnings.warn(f'Unmatched ENSG ids in adata exceed {percentage}%  ', UserWarning, stacklevel=2)
+
     match flavour:
-        case 'scanpy':
-            sc.tl.score_genes(
-            adata, gene_list=available, score_name=score_name,
-            layer=layer, use_raw=False, ctrl_as_ref=False,
-            )
         case 'AUCell':
-            raise NotImplementedError('AUCell scoring is not implemented yet')
-            # TODO: implement AUCell scoring
+            import decoupler as dc
+            # generate net(gene set)
+            net = pd.DataFrame({'source': score_name, 'target': ids})
+            dc.mt.aucell(adata, layer = layer, net = net, tmin=3)
+        case 'scanpy':
+            import scanpy as sc
+            sc.tl.score_genes(
+                adata, gene_list=ids, score_name=score_name,
+                layer=layer, use_raw=False, ctrl_as_ref=False,
+                )
         case _:
             raise ValueError(f'Unknown method: {flavour!r}')
     

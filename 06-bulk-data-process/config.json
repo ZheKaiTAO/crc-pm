@@ -1,0 +1,16 @@
+{
+  "seed": 20261004,
+  "workers": 4,
+  "min_count": 10,
+  "min_samples": 18,
+  "fdr": 0.05,
+  "min_log2fc": 0.5,
+  "min_signature_coverage": 0.8,
+  "bootstrap_iterations": 5000,
+  "permutation_iterations": 10000,
+  "gsea_permutations": 10000,
+  "gene_sets": {
+    "Hallmark": "https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2025.1.Hs/h.all.v2025.1.Hs.symbols.gmt",
+    "GO_BP": "https://data.broadinstitute.org/gsea-msigdb/msigdb/release/2025.1.Hs/c5.go.bp.v2025.1.Hs.symbols.gmt"
+  }
+}

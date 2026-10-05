@@ -47,7 +47,7 @@ for (pac in c(CranPacList,BiocPacList,RemotePacList)){
 # ----------
 
 # HRA003293
-write_h5ad(tumor, path = "./data/crc01/HRA003293.h5ad",compression = 'gzip')
+write_h5ad(tumor, path = "./data/Li_2025_NatCa/HRA003293.h5ad",compression = 'gzip')
 
 # GSE234804
 ##########
@@ -71,7 +71,7 @@ registerS3method("SetAssayData","Assay",compat_set,envir = ns)
 
 # only fetch crc and pm, cast away all hepatic metastasis
 
-DataRootDir = './raw-data/crc03/GSE234804'
+DataRootDir = './seq-data/GSE234804'
 CRCPattern = "^GSM747\\d+_CRC\\d+_new\\.h5seurat$"
 PCPattern = "^GSM747\\d+_PC\\d+_new\\.h5seurat$"
 CRCFileName <- list.files(
@@ -92,4 +92,4 @@ for (dir in c(CRCFileName,PCFileName)){
 }
 
 # GSE183916
-write_h5ad(GSE183916_merged_objects, path = "./data/crc06/GSE183916/GSE183916.h5ad",compression = 'gzip')
+write_h5ad(GSE183916_merged_objects, path = "./data/Lenos_2022_NatCom/GSE183916/GSE183916.h5ad",compression = 'gzip')
