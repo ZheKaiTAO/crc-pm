@@ -51,7 +51,7 @@ def get_versions():
     return [p.name for p in MAPPING_PATH.iterdir() if p.is_dir()]
 
 
-def read_gtf(version):
+def read_gtf(version:str):
     # read the preprocessed GTF
     mapping = pd.read_csv(
         MAPPING_PATH / version / "gene_id_gene_name_gene_biotype.csv",
@@ -63,6 +63,14 @@ def read_gtf(version):
     )
     return mapping.sort_values("biotype_priority", kind="stable")
 
+
+def id2name(ids:list, version = GTF_VERSION):
+    """
+    Transform IDs to gene names, preserving unknown IDs and input order.
+    """
+    mapping = read_gtf(version)
+    id2name_dict = dict(zip(mapping["gene_id"],mapping["gene_name"]))
+    return [id2name_dict.get(gene_id, gene_id) for gene_id in ids]
 
 @cache
 def get_gene_mappings(version):
