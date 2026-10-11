@@ -1,2 +1,24 @@
+# Python 缓存和虚拟环境
 __pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# Jupyter 和 R 会话文件（保留 .ipynb 和 .R 源文件）
 .ipynb_checkpoints/
+.Rhistory
+.RData
+.Ruserdata
+
+# 本地配置和系统文件
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
