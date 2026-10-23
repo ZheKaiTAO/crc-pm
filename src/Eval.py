@@ -2,7 +2,7 @@ from pathlib import Path
 import warnings
 import pandas as pd
 
-from .GTFMapping import resolve_gene_name
+from .GTFMapping import name2id
 # . means import relatively
 
 GENE_SET_ROOT_DIR = Path(__file__).resolve().parents[2] / 'tables/geneset'
@@ -33,7 +33,7 @@ def read_gene_set(score_name=None):
     genes = parse_multiple(pd.read_csv(
         path,header=None,
         keep_default_na=False,).iloc[:, 0].tolist())
-    resolved_ENSG = resolve_gene_name(genes, fill_NA=False) # a pd dataframe
+    resolved_ENSG = name2id(genes, fill_NA=False) # a pd dataframe
     nona_ids = resolved_ENSG['gene_id'].ne('NA')
     # we don't care about the values actually; list(dict) is just to deduplicated since dict keys will be unique
     ids = list(dict.fromkeys(resolved_ENSG.loc[nona_ids, 'gene_id']))
