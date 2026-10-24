@@ -99,6 +99,5 @@ def load():
     adata.var.index.name = None
     adata.var = adata.var.drop(columns=["genome", "feature_types"])
 
-    _, gene2biotype = src.GTFMapping.get_gene_mappings(GTF_VERSION)
-    adata.var["gene_biotype"] = adata.var["gene_name"].map(gene2biotype)
+    adata.var["gene_biotype"] = src.GTFMapping.id2biotype(adata.var["gene_id"], version=GTF_VERSION)
     return adata

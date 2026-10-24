@@ -38,9 +38,8 @@ def load():
     gene_names = adata.var_names.astype(str)
     adata.var = pd.DataFrame({"gene_name": gene_names}, index=gene_names)
 
-    gene2id, gene2biotype = src.GTFMapping.get_gene_mappings(GTF_VERSION)
-    adata.var["gene_id"] = adata.var["gene_name"].map(gene2id)
-    adata.var["gene_biotype"] = adata.var["gene_name"].map(gene2biotype)
+    adata.var["gene_id"] = src.GTFMapping.name2id(adata.var["gene_name"], version=GTF_VERSION)
+    adata.var["gene_biotype"] = src.GTFMapping.id2biotype(adata.var["gene_id"], version=GTF_VERSION)
     adata = adata[:, adata.var["gene_id"].notna()].copy()
     adata.var = adata.var.set_index("gene_id", drop=False)
     adata.var.index.name = None

@@ -33,8 +33,10 @@ def read_gene_set(score_name=None):
     genes = parse_multiple(pd.read_csv(
         path,header=None,
         keep_default_na=False,).iloc[:, 0].tolist())
-    resolved_ENSG = name2id(genes, fill_NA=False) # a pd dataframe
-    nona_ids = resolved_ENSG['gene_id'].ne('NA')
+    resolved_ENSG = pd.DataFrame({
+        'gene_name': genes, 'gene_id': name2id(genes),
+    }).dropna(subset=['gene_id']).reset_index(drop=True)
+    nona_ids = resolved_ENSG['gene_id'].notna()
     # we don't care about the values actually; list(dict) is just to deduplicated since dict keys will be unique
     ids = list(dict.fromkeys(resolved_ENSG.loc[nona_ids, 'gene_id']))
     return ids, resolved_ENSG

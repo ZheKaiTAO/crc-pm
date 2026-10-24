@@ -62,10 +62,9 @@ def load():
     adata.obsm = {}
     adata.obsp = {}
 
-    _, gene2biotype = src.GTFMapping.get_gene_mappings(GTF_VERSION)
     adata.var["gene_name"] = adata.var_names.astype(str)
     adata.var = adata.var.rename(columns={"gene_ids": "gene_id"})
     adata.var = adata.var.set_index("gene_id", drop=False)
     adata.var.index.name = None
-    adata.var["gene_biotype"] = adata.var["gene_name"].map(gene2biotype)
+    adata.var["gene_biotype"] = src.GTFMapping.id2biotype(adata.var["gene_id"], version=GTF_VERSION)
     return adata
