@@ -130,6 +130,16 @@ def plot_volcano(
             '#9E9E9E' if status == 'normal'
             else cmaps[status](_color_levels(y[mask]))
         )
+        # 绘制边缘
+        ax.scatter(
+            x[mask], y[mask],
+            s=sizes[mask], linewidths=1, c='black',
+            )
+        ax.scatter(
+            x[mask], y[mask],
+            s=sizes[mask], linewidths=0, c='white',
+            )
+        # 正常
         ax.scatter(
             x[mask], y[mask],
             s=sizes[mask], linewidths=0, c=colors, label=status,

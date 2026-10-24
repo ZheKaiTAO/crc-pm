@@ -124,7 +124,7 @@ def get_history_mapping(version):
     return dict(zip(history["name"], history["gene_id"]))
 
 # using the previous dicts to get ENSG ID
-def name2id(genes, fill_NA = False, Warning = True):
+def name2id(genes, fill_NA = False, Warning = True, version = GTF_VERSION):
     """
     resolve a list of single gene names eg. ['TP53','FABP']
     first we check if it could converted using GTF mapping
@@ -133,7 +133,7 @@ def name2id(genes, fill_NA = False, Warning = True):
     """
     GTF_DF = _load_gtf(version).drop_duplicates("gene_name", keep="first")
     normal_mapping = dict(zip(GTF_DF["gene_name"], GTF_DF["gene_id"]))
-    history_mapping = get_history_mapping(GTF_VERSION)
+    history_mapping = get_history_mapping(version)
     rows = []
     notfound_lst = []
     for item in genes:
@@ -169,17 +169,27 @@ def _get_gene_positions(version):
     }
 
 
-def id2pos(ids: list, version=GTF_VERSION):
+def id2pos(ids: list, version=GTF_VERSION, flavour=None):
     """Return (chr, start, end, strand) tuples in input order.
 
     Coordinates retain the GTF 1-based, inclusive convention. Unknown IDs
     return None and are reported together in one warning.
+    With flavour=None, chromosome names retain their GTF spelling. With
+    flavour="chr", names have a single chr prefix and mitochondria use chrM.
     """
+    if flavour not in (None, "chr"):
+        raise ValueError("flavour must be None or 'chr'")
     positions = _get_gene_positions(version)
     result = []
     missing = {}
     for gene_id in ids:
-        result.append(positions.get(gene_id))
+        position = positions.get(gene_id)
+        if position is not None and flavour == "chr":
+            chromosome, start, end, strand = position
+            chromosome = chromosome.removeprefix("chr")
+            chromosome = "chrM" if chromosome in {"MT", "M"} else f"chr{chromosome}"
+            position = (chromosome, start, end, strand)
+        result.append(position)
         if gene_id not in positions:
             missing[gene_id] = None
     if missing:
