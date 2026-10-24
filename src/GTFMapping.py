@@ -123,40 +123,60 @@ def get_history_mapping(version):
     history = history.sort_values("priority", kind="stable").drop_duplicates("name")
     return dict(zip(history["name"], history["gene_id"]))
 
-# using the previous dicts to get ENSG ID
-def name2id(genes, fill_NA = False, Warning = True, version = GTF_VERSION):
-    """
-    resolve a list of single gene names eg. ['TP53','FABP']
-    first we check if it could converted using GTF mapping
-    if we encouter some aliases or previous names, check hgnc
-    if that doesn't help, we tell it to fuck off and warns about it 
-    """
-    GTF_DF = _load_gtf(version).drop_duplicates("gene_name", keep="first")
-    normal_mapping = dict(zip(GTF_DF["gene_name"], GTF_DF["gene_id"]))
-    history_mapping = get_history_mapping(version)
-    rows = []
-    notfound_lst = []
-    for item in genes:
-        gene_id = normal_mapping.get(item, 'GTF not found')
-        if gene_id == 'GTF not found':
-            gene_id = history_mapping.get(item, 'GTF and HGNC not found')
-            if gene_id == 'GTF and HGNC not found':
-                notfound_lst.append(item)
-                if fill_NA:
-                    rows.append([item, 'NA'])
-                continue
-        rows.append([item, gene_id])
-    if Warning and len(notfound_lst) > 0:
-        print(f"Warning: {len(notfound_lst)} names not found: {', '.join(notfound_lst)}")
-    return pd.DataFrame(rows, columns=['gene_name', 'gene_id'])
-
-def id2name(ids:list, version = GTF_VERSION):
-    """
-    Transform IDs to gene names, preserving unknown IDs and input order.
-    """
+@cache
+def _get_gene_mappings(version):
+    """Build consistent name/ID lookups using the GTF biotype priority."""
     mapping = _load_gtf(version)
-    id2name_dict = dict(zip(mapping["gene_id"],mapping["gene_name"]))
-    return [id2name_dict.get(gene_id, gene_id) for gene_id in ids]
+    by_name = mapping.dropna(subset=["gene_name"]).drop_duplicates("gene_name")
+    by_id = mapping.drop_duplicates("gene_id")
+    return (
+        dict(zip(by_name["gene_name"], by_name["gene_id"])),
+        {gene_id: name if pd.notna(name) else None
+         for gene_id, name in zip(by_id["gene_id"], by_id["gene_name"])},
+        {gene_id: biotype if pd.notna(biotype) else None
+         for gene_id, biotype in zip(by_id["gene_id"], by_id["gene_biotype"])},
+    )
+
+
+def name2id(genes, Warning=True, version=GTF_VERSION):
+    """Return IDs in input order, including duplicates and None for missing names.
+
+    Resolve GTF names first, then HGNC current names, previous names and aliases.
+    """
+    normal_mapping, _, _ = _get_gene_mappings(version)
+    result = []
+    missing = []
+    for name in genes:
+        gene_id = normal_mapping.get(name)
+        if gene_id is None and pd.notna(name):
+            gene_id = get_history_mapping(version).get(name)
+        result.append(gene_id)
+        if gene_id is None:
+            missing.append(name)
+    if Warning and missing:
+        print(f"Warning: {len(missing)} names not found: {', '.join(map(str, missing))}")
+    return result
+
+
+def id2name(ids, version=GTF_VERSION):
+    """Return names in input order, including duplicates and None for missing IDs."""
+    _, mapping, _ = _get_gene_mappings(version)
+    return [mapping.get(gene_id) for gene_id in ids]
+
+
+def id2biotype(ids, version=GTF_VERSION):
+    """Return biotypes in input order; IDs absent from this GTF return None."""
+    _, _, mapping = _get_gene_mappings(version)
+    return [mapping.get(gene_id) for gene_id in ids]
+
+
+def name2biotype(names, version=GTF_VERSION):
+    """Resolve names/aliases to IDs, then return their biotypes in input order.
+
+    Missing names or IDs absent from the selected GTF return None.
+    """
+    return id2biotype(name2id(names, version=version), version=version)
+
 
 @cache
 def _get_gene_positions(version):
