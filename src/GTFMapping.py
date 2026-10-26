@@ -138,44 +138,86 @@ def _get_gene_mappings(version):
     )
 
 
-def name2id(genes, Warning=True, version=GTF_VERSION):
-    """Return IDs in input order, including duplicates and None for missing names.
-
-    Resolve GTF names first, then HGNC current names, previous names and aliases.
+def resolve(src, dest, *, version=GTF_VERSION, Warning=True, flavour=None):
     """
-    normal_mapping, _, _ = _get_gene_mappings(version)
+    src是一个可迭代的对象, 里面装着ENSG ID(注意不检查是否去除版本号)或gene name
+    dest 可选 'id', 'name', 'biotype', 'pos'
+    flavour 'chr'返回infercnv能用的格式
+    """
+    return _resolve(src, dest, version, Warning, flavour, source="auto")
+
+
+def _resolve(src, dest, version, Warning, flavour=None, *, source):
+    if dest not in ("id", "name", "biotype", "pos"):
+        raise ValueError("dest must be 'id', 'name', 'biotype', or 'pos'")
+    if flavour not in (None, "chr"):
+        raise ValueError("flavour must be None or 'chr'")
+
+    normal_mapping = id_names = id_biotypes = None
+    if source != "id" or dest != "pos":
+        normal_mapping, id_names, id_biotypes = _get_gene_mappings(version)
+    positions = _get_gene_positions(version) if dest == "pos" else None
+    target = {"name": id_names, "biotype": id_biotypes, "pos": positions}.get(dest)
+
     result = []
-    missing = []
-    for name in genes:
-        gene_id = normal_mapping.get(name)
-        if gene_id is None and pd.notna(name):
-            gene_id = get_history_mapping(version).get(name)
-        result.append(gene_id)
-        if gene_id is None:
-            missing.append(name)
-    if Warning and missing:
-        print(f"Warning: {len(missing)} names not found: {', '.join(map(str, missing))}")
+    missing_names = []
+    missing_ids = {}
+    for value in src:
+        is_id = source == "id" or (
+            source == "auto" and isinstance(value, str) and value.startswith("ENSG")
+        )
+        if is_id:
+            gene_id = value
+        else:
+            gene_id = normal_mapping.get(value)
+            if gene_id is None and pd.notna(value):
+                gene_id = get_history_mapping(version).get(value)
+            if gene_id is None:
+                missing_names.append(value)
+
+        if dest == "id":
+            resolved = gene_id if not is_id or gene_id in id_names else None
+        else:
+            resolved = target.get(gene_id)
+        if dest == "pos" and resolved is not None and flavour == "chr":
+            chromosome, start, end, strand = resolved
+            chromosome = chromosome.removeprefix("chr")
+            chromosome = "chrM" if chromosome in {"MT", "M"} else f"chr{chromosome}"
+            resolved = (chromosome, start, end, strand)
+        result.append(resolved)
+
+        if source == "auto":
+            if gene_id is not None and gene_id not in id_names:
+                missing_ids[gene_id] = None
+        elif source == "id" and dest == "pos" and gene_id not in positions:
+            missing_ids[gene_id] = None
+
+    if Warning and missing_names:
+        print(f"Warning: {len(missing_names)} names not found: {', '.join(map(str, missing_names))}")
+    if Warning and missing_ids:
+        warnings.warn(
+            f"{len(missing_ids)} gene IDs not found in {version}: "
+            + ", ".join(str(gene_id) for gene_id in missing_ids),
+            UserWarning,
+            stacklevel=3,
+        )
     return result
 
 
+def name2id(genes, Warning=True, version=GTF_VERSION):
+    return _resolve(genes, "id", version, Warning, source="name")
+
+
 def id2name(ids, version=GTF_VERSION):
-    """Return names in input order, including duplicates and None for missing IDs."""
-    _, mapping, _ = _get_gene_mappings(version)
-    return [mapping.get(gene_id) for gene_id in ids]
+    return _resolve(ids, "name", version, False, source="id")
 
 
 def id2biotype(ids, version=GTF_VERSION):
-    """Return biotypes in input order; IDs absent from this GTF return None."""
-    _, _, mapping = _get_gene_mappings(version)
-    return [mapping.get(gene_id) for gene_id in ids]
+    return _resolve(ids, "biotype", version, False, source="id")
 
 
 def name2biotype(names, version=GTF_VERSION):
-    """Resolve names/aliases to IDs, then return their biotypes in input order.
-
-    Missing names or IDs absent from the selected GTF return None.
-    """
-    return id2biotype(name2id(names, version=version), version=version)
+    return _resolve(names, "biotype", version, True, source="name")
 
 
 @cache
@@ -190,33 +232,9 @@ def _get_gene_positions(version):
 
 
 def id2pos(ids: list, version=GTF_VERSION, flavour=None):
-    """Return (chr, start, end, strand) tuples in input order.
+    """
+    Return (chr, start, end, strand) tuples
 
-    Coordinates retain the GTF 1-based, inclusive convention. Unknown IDs
-    return None and are reported together in one warning.
-    With flavour=None, chromosome names retain their GTF spelling. With
     flavour="chr", names have a single chr prefix and mitochondria use chrM.
     """
-    if flavour not in (None, "chr"):
-        raise ValueError("flavour must be None or 'chr'")
-    positions = _get_gene_positions(version)
-    result = []
-    missing = {}
-    for gene_id in ids:
-        position = positions.get(gene_id)
-        if position is not None and flavour == "chr":
-            chromosome, start, end, strand = position
-            chromosome = chromosome.removeprefix("chr")
-            chromosome = "chrM" if chromosome in {"MT", "M"} else f"chr{chromosome}"
-            position = (chromosome, start, end, strand)
-        result.append(position)
-        if gene_id not in positions:
-            missing[gene_id] = None
-    if missing:
-        warnings.warn(
-            f"{len(missing)} gene IDs not found in {version}: "
-            + ", ".join(str(gene_id) for gene_id in missing),
-            UserWarning,
-            stacklevel=2,
-        )
-    return result
+    return _resolve(ids, "pos", version, True, flavour, source="id")
